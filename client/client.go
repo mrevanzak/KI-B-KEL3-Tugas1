@@ -14,18 +14,25 @@ import (
 )
 
 func main() {
+	// Resolve TCP address
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
 	utils.CheckError(err)
+
+	// Dial TCP connection
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	utils.CheckError(err)
 
+	// Create an instance of the EchoProtocol
 	echoProtocol := &echo.EchoProtocol{}
 
+	// Load and parse public key
 	_, pub_key := utils.LoadAndParse()
+
+	// Define session key and message
 	sessionkey := []byte{9, 10, 11, 12, 13, 14, 15, 16}
 	message := []byte{1}
 
-	// encrypt sessionkey
+	// Encrypt the session key using RSA
 	encryptedSessionKey, err := rsa.EncryptOAEP(
 		sha256.New(),
 		rand.Reader,
@@ -35,15 +42,20 @@ func main() {
 	)
 	utils.CheckError(err)
 
+	// Append encrypted session key to the message
 	message = append(message, encryptedSessionKey...)
 
+	// Send the message to the server
 	conn.Write(echo.NewEchoPacket([]byte(message), false).Serialize())
+
+	// Read the server's response
 	p, err := echoProtocol.ReadPacket(conn)
 	if err == nil {
 		echoPacket := p.(*echo.EchoPacket)
 		fmt.Printf("Server reply:[%v] [%v]\n", echoPacket.GetLength(), string(echoPacket.GetBody()))
 	}
 
+	// Prepare a secret message and encrypt it using DES
 	secretmessage := []byte("KELOMPOK 3 KI B!")
 	message = []byte{2}
 	ciphertext := make([]byte, 16)
@@ -54,8 +66,10 @@ func main() {
 	block.Encrypt(ciphertext[8:16], secretmessage[8:16])
 	message = append(message, ciphertext...)
 
+	// Send the encrypted message to the server
 	conn.Write(echo.NewEchoPacket([]byte(message), false).Serialize())
 
+	// Read the server's response
 	p, err = echoProtocol.ReadPacket(conn)
 	if err == nil {
 		echoPacket := p.(*echo.EchoPacket)
@@ -63,12 +77,12 @@ func main() {
 	}
 
 	if false {
-		// ping <--> pong
+		// Ping <--> Pong
 		for i := 0; i < 3; i++ {
-			// write
+			// Write a ping message
 			conn.Write(echo.NewEchoPacket([]byte("hello"), false).Serialize())
 
-			// read
+			// Read the server's response
 			p, err := echoProtocol.ReadPacket(conn)
 			if err == nil {
 				echoPacket := p.(*echo.EchoPacket)
@@ -79,5 +93,6 @@ func main() {
 		}
 	}
 
+	// Close the connection
 	conn.Close()
 }
