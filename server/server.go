@@ -18,10 +18,13 @@ import (
 	"github.com/gansidui/gotcp/examples/echo"
 )
 
+// Session key used for encryption/decryption
 var sessionkey = []byte{0, 0, 0, 0, 0, 0, 0, 0}
 
+// Callback struct for handling connection events
 type Callback struct{}
 
+// OnConnect is called when a new connection is established
 func (*Callback) OnConnect(c *gotcp.Conn) bool {
 	addr := c.GetRawConn().RemoteAddr()
 	c.PutExtraData(addr)
@@ -29,14 +32,18 @@ func (*Callback) OnConnect(c *gotcp.Conn) bool {
 	return true
 }
 
+// OnMessage is called when a message is received from the client
 func (*Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 	echoPacket := p.(*echo.EchoPacket)
 	body := echoPacket.GetBody()
+
 	if body[0] == 1 {
+		// Handle message type 1
 		priv_key, _ := utils.LoadAndParse()
 		paket := echo.NewEchoPacket([]byte("OK1"), false)
 
 		pak := echoPacket.GetBody()[1:]
+		// Decrypt the received message using RSA
 		decriptedMessage, err := rsa.DecryptOAEP(
 			sha256.New(),
 			rand.Reader,
@@ -46,15 +53,18 @@ func (*Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 		)
 		utils.CheckError(err)
 
+		// Copy the decrypted session key
 		copy(sessionkey, decriptedMessage[0:8])
 		fmt.Println("SESSION KEY:", sessionkey)
 		c.AsyncWritePacket(paket, time.Second)
 		fmt.Println("OK1")
 
 	} else if body[0] == 2 {
+		// Handle message type 2
 		pak := echoPacket.GetBody()[1:]
 		plaintext := make([]byte, 16)
 
+		// Decrypt the secret message using DES
 		block, err := des.NewCipher(sessionkey)
 		utils.Check(err)
 
@@ -65,44 +75,46 @@ func (*Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 		paket := echo.NewEchoPacket([]byte("OK2"), false)
 		c.AsyncWritePacket(paket, time.Second)
 		fmt.Println("OK2")
-
 	}
+
 	return true
 }
 
+// OnClose is called when a connection is closed
 func (*Callback) OnClose(c *gotcp.Conn) {
 	fmt.Println("OnClose:", c.GetExtraData())
 }
 
 func main() {
+	// Set the maximum number of CPUs that can be executing simultaneously
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// creates a tcp listener
+	// Create a TCP listener
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":8989")
 	utils.CheckError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	utils.CheckError(err)
 
-	// generate private and public key
+	// Generate private and public key
 	utils.GenerateAndSave()
 	fmt.Println("Berhasil membuat private key dan public key")
 
-	// creates a server
+	// Create a server configuration
 	config := &gotcp.Config{
 		PacketSendChanLimit:    20,
 		PacketReceiveChanLimit: 20,
 	}
 	srv := gotcp.NewServer(config, &Callback{}, &echo.EchoProtocol{})
 
-	// starts service
+	// Start the server
 	go srv.Start(listener, time.Second)
 	fmt.Println("listening:", listener.Addr())
 
-	// catchs system signal
+	// Catch system signals
 	chSig := make(chan os.Signal)
 	signal.Notify(chSig, syscall.SIGINT, syscall.SIGTERM)
 	fmt.Println("Signal: ", <-chSig)
 
-	// stops service
+	// Stop the server
 	srv.Stop()
 }
