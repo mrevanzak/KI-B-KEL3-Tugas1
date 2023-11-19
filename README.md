@@ -146,6 +146,18 @@ conn.Write(echo.NewEchoPacket([]byte(message), false).Serialize())
 
 Pada bagian ini client.go adan mengirimkan pesan kedua ke server. Pesan kedua ini berisi pesan rahasia yang akan di enkripsi menggunakan DES dan akan dikirimkan ke server.
 
+4. Menangani respon dari server
+
+```go
+p, err := echoProtocol.ReadPacket(conn)
+	if err == nil {
+		echoPacket := p.(*echo.EchoPacket)
+		fmt.Printf("Server reply:[%v] [%v]\n", echoPacket.GetLength(), string(echoPacket.GetBody()))
+	}
+```
+
+Pada bagian ini client akan menangani respon dari server. Jika pesan yang diterima adalah OK1, maka client akan menampilkan pesan OK1 dilayar. Jika pesan yang diterima adalah OK2, maka client akan menampilkan pesan OK2 dilayar.
+
 ### Utils
 
 Berisi fungsi-fungsi untuk keperluan enkripsi, pembuatan kunci, dan melakukan handling error.
